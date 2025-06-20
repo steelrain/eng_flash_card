@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>영어 플래시카드 학습</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts - Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        /* Custom styles for animations and font-family */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .animate-fadeIn {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+
+        @keyframes bounce {
+            0%, 100% {
+                transform: translateY(-25%);
+                animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+            }
+            50% {
+                transform: none;
+                animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+            }
+        }
+        .animate-bounce {
+            animation: bounce 1s infinite;
+        }
+
+        /* Hide the default scrollbar */
+        ::-webkit-scrollbar {
+            width: 0;
+            height: 0;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center p-4">
+    <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-lg">
+        <h1 class="text-4xl font-extrabold text-gray-800 text-center mb-8">
+            영어 플래시카드 학습
+        </h1>
+
+        <!-- URL Input Section -->
+        <div id="urlInputSection" class="text-center">
+            <p class="text-xl text-gray-700 mb-4">
+                학습할 Google Sheet의 주소를 입력해주세요.
+            </p>
+            <input
+                type="text"
+                id="googleSheetUrlInput"
+                placeholder="예: https://docs.google.com/spreadsheets/d/YOUR_ID/edit..."
+                class="w-full p-3 border border-gray-300 rounded-lg text-lg focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out mb-4"
+            />
+            <p id="urlError" class="text-red-500 text-sm mb-4 hidden"></p>
+            <button
+                id="submitUrlButton"
+                class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 w-full"
+            >
+                시트 ID 추출 및 다음
+            </button>
+            <p class="text-sm text-gray-500 mt-4 text-left">
+                * <strong>중요:</strong> 이 앱은 Google Sheets API를 사용하지 않습니다. <br/>
+                * 학습할 Google Sheet를 <strong>'웹에 게시'</strong>하고 <strong>'쉼표로 구분된 값(.csv)'</strong> 형식으로 선택해야 합니다. <br/>
+                * 게시된 시트의 <strong>첫 번째 열에 영어 단어</strong>, <strong>두 번째 열에 한글 뜻</strong>이 있어야 합니다.
+            </p>
+        </div>
+
+        <!-- GID Selection Section -->
+        <div id="gidSelectionSection" class="text-center hidden">
+            <p class="text-xl text-gray-700 mb-4">
+                학습할 시트의 GID를 선택하거나 직접 입력해주세요.
+            </p>
+            <p id="loadingData" class="text-blue-600 text-lg mb-4 animate-pulse hidden">
+                데이터를 불러오는 중...
+            </p>
+            <p id="dataFetchError" class="text-red-500 text-base mb-4 hidden"></p>
+            <div class="flex flex-col sm:flex-row gap-4 mb-4">
+                <select
+                    id="gidDropdown"
+                    class="flex-grow p-3 border border-gray-300 rounded-lg text-lg focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out"
+                >
+                    <option value="" disabled selected>공통 GID 선택</option>
+                    <option value="0">GID: 0</option>
+                    <option value="1">GID: 1</option>
+                    <option value="2">GID: 2</option>
+                    <option value="3">GID: 3</option>
+                    <option value="4">GID: 4</option>
+                    <option value="5">GID: 5</option>
+                </select>
+                <span class="text-gray-500 flex items-center justify-center sm:hidden">또는</span>
+                <input
+                    type="text"
+                    id="manualGidInput"
+                    placeholder="GID 직접 입력 (예: 123456789)"
+                    class="flex-grow p-3 border border-gray-300 rounded-lg text-lg focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out"
+                />
+            </div>
+            <p class="text-sm text-gray-500 mt-2 text-left">
+                * GID는 Google Sheet URL에서 #gid= 뒤에 오는 숫자입니다.
+                예: `https://docs.google.com/spreadsheets/d/YOUR_ID/edit#gid=123456789`에서 GID는 `123456789`입니다. <br/>
+                * 시트 이름이 '1', '2', '3' 등으로 되어 있다면, GID가 0, 1, 2 등으로 순차적일 수 있습니다.
+            </p>
+            <button
+                id="backToUrlInputButton"
+                class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 mt-4 w-full"
+            >
+                URL 다시 입력하기
+            </button>
+        </div>
+
+        <!-- Flashcard Game Section -->
+        <div id="flashcardGameSection" class="text-center hidden">
+            <!-- Test Completion Section -->
+            <div id="testCompletionSection" class="mt-8 hidden">
+                <h2 class="text-3xl font-bold text-blue-700 mb-4">
+                    테스트 완료! 🎉
+                </h2>
+                <p class="text-xl text-gray-800 mb-2">
+                    총 단어 수: <span id="totalWordsCount"></span>
+                </p>
+                <p class="text-xl text-gray-800 mb-6">
+                    맞춘 단어 수: <span id="correctAnswersFinalCount"></span>
+                </p>
+                <button
+                    id="restartTestButton"
+                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 mr-4"
+                >
+                    다시 시작하기
+                </button>
+                <button
+                    id="exitTestFinalButton"
+                    class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105"
+                >
+                    종료하기 (URL 입력으로 돌아가기)
+                </button>
+            </div>
+
+            <!-- Current Flashcard Display -->
+            <div id="currentFlashcardDisplay">
+                <div class="mb-6">
+                    <p class="text-lg text-gray-600 mb-2">
+                        현재 GID: <span id="currentGidDisplay" class="font-semibold text-blue-600"></span>
+                    </p>
+                    <p class="text-lg text-gray-600">
+                        진행 상황: <span id="currentWordProgress"></span> / <span id="totalWordsInSheet"></span>
+                    </p>
+                    <p class="text-lg text-gray-600">
+                        점수: <span id="currentScore" class="font-semibold text-green-600"></span>
+                    </p>
+                </div>
+
+                <div class="bg-blue-50 p-6 rounded-xl mb-6 shadow-inner">
+                    <p id="englishWord" class="text-5xl font-extrabold text-blue-800 mb-4">
+                        단어를 불러오는 중...
+                    </p>
+                    <p id="koreanMeaning" class="text-3xl font-bold text-purple-700 mt-4 hidden animate-fadeIn">
+                        <!-- Korean meaning will be displayed here -->
+                    </p>
+                </div>
+
+                <input
+                    type="text"
+                    id="koreanInput"
+                    placeholder="여기에 한글 뜻을 입력하세요."
+                    class="w-full p-4 border-2 border-gray-300 rounded-lg text-xl focus:outline-none focus:border-blue-500 transition duration-200 ease-in-out mb-4"
+                />
+
+                <div id="feedbackDisplay" class="text-5xl font-bold mb-6 hidden">
+                    <!-- O/X feedback will be displayed here -->
+                </div>
+
+                <div class="flex flex-col sm:flex-row justify-center gap-4 mt-6">
+                    <button
+                        id="checkAnswerButton"
+                        class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 flex-grow sm:flex-initial"
+                    >
+                        정답<br/>확인
+                    </button>
+                    <button
+                        id="showMeaningButton"
+                        class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 flex-grow sm:flex-initial"
+                    >
+                        뜻<br/>보기
+                    </button>
+                    <button
+                        id="nextWordButton"
+                        class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 flex-grow sm:flex-initial hidden"
+                    >
+                        다음 단어
+                    </button>
+                    <button
+                        id="exitToUrlInputMidTestButton"
+                        class="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 flex-grow sm:flex-initial mt-4 sm:mt-0"
+                    >
+                        처음으로<br/>(URL 입력 화면)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables to manage application state
+        let words = [];
+        let currentWordIndex = 0;
+        let score = 0;
+        let attempts = 0; // Attempts for the current word
+        let correctAnswersCount = 0; // Correct on first attempt
+        let spreadsheetId = '';
+        let currentGid = '';
+
+        // DOM elements references
+        const urlInputSection = document.getElementById('urlInputSection');
+        const googleSheetUrlInput = document.getElementById('googleSheetUrlInput');
+        const submitUrlButton = document.getElementById('submitUrlButton');
+        const urlError = document.getElementById('urlError');
+
+        const gidSelectionSection = document.getElementById('gidSelectionSection');
+        const gidDropdown = document.getElementById('gidDropdown');
+        const manualGidInput = document.getElementById('manualGidInput');
+        const loadingData = document.getElementById('loadingData');
+        const dataFetchErrorDisplay = document.getElementById('dataFetchError');
+        const backToUrlInputButton = document.getElementById('backToUrlInputButton');
+
+        const flashcardGameSection = document.getElementById('flashcardGameSection');
+        const testCompletionSection = document.getElementById('testCompletionSection');
+        const currentFlashcardDisplay = document.getElementById('currentFlashcardDisplay');
+
+        const englishWordDisplay = document.getElementById('englishWord');
+        const koreanMeaningDisplay = document.getElementById('koreanMeaning');
+        const koreanInput = document.getElementById('koreanInput');
+        const feedbackDisplay = document.getElementById('feedbackDisplay');
+        const currentGidDisplay = document.getElementById('currentGidDisplay');
+        const currentWordProgress = document.getElementById('currentWordProgress');
+        const totalWordsInSheet = document.getElementById('totalWordsInSheet');
+        const currentScoreDisplay = document.getElementById('currentScore');
+
+        const checkAnswerButton = document.getElementById('checkAnswerButton');
+        const showMeaningButton = document.getElementById('showMeaningButton');
+        const nextWordButton = document.getElementById('nextWordButton');
+        const exitToUrlInputMidTestButton = document.getElementById('exitToUrlInputMidTestButton');
+
+        const totalWordsCountDisplay = document.getElementById('totalWordsCount');
+        const correctAnswersFinalCountDisplay = document.getElementById('correctAnswersFinalCount');
+        const restartTestButton = document.getElementById('restartTestButton');
+        const exitTestFinalButton = document.getElementById('exitTestFinalButton');
+
+        // --- Utility Functions ---
+
+        // Function to extract spreadsheet ID from Google Sheet URL
+        function extractSpreadsheetId(url) {
+            const match = url.match(/\/d\/([a-zA-Z0-9_-]+)(?:\/edit)?/);
+            return match ? match[1] : null;
+        }
+
+        // Function to parse CSV text into an array of word objects
+        function parseCsv(csvText) {
+            const lines = csvText.split('\n').filter(line => line.trim() !== '');
+            const parsedData = [];
+
+            // Simple heuristic to skip a potential header row
+            const startIndex = (lines.length > 0 && !lines[0].includes(',')) ? 1 : 0;
+
+            for (let i = startIndex; i < lines.length; i++) {
+                const parts = lines[i].split(',');
+                if (parts.length >= 2) {
+                    const english = parts[0].trim();
+                    const korean = parts[1].trim();
+                    if (english !== '' && korean !== '') {
+                        parsedData.push({ english, korean });
+                    }
+                }
+            }
+            return parsedData;
+        }
+
+        // Function to fetch words from the Google Sheet CSV export URL
+        async function fetchWords(gid) {
+            loadingData.classList.remove('hidden');
+            dataFetchErrorDisplay.classList.add('hidden');
+            words = []; // Clear existing words
+
+            const csvExportUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=${gid}`;
+            console.log('Fetching from:', csvExportUrl);
+
+            try {
+                const response = await fetch(csvExportUrl);
+                if (!response.ok) {
+                    throw new Error(`HTTP 오류! 상태: ${response.status} - 시트가 웹에 게시되었는지, GID가 올바른지 확인해주세요.`);
+                }
+                const csvText = await response.text();
+                console.log('Fetched CSV Text (first 200 chars):', csvText.substring(0, 200) + '...');
+
+                const parsedWords = parseCsv(csvText);
+                if (parsedWords.length === 0) {
+                    throw new Error("시트에서 유효한 단어를 찾을 수 없습니다. 데이터 형식을 확인하거나 다른 GID를 시도해 보세요.");
+                }
+                words = parsedWords;
+                currentWordIndex = 0;
+                score = 0;
+                attempts = 0;
+                correctAnswersCount = 0;
+                displayCurrentWord();
+                updateScoreAndProgress();
+                koreanInput.value = '';
+                feedbackDisplay.classList.add('hidden');
+                koreanMeaningDisplay.classList.add('hidden');
+                nextWordButton.classList.add('hidden');
+                flashcardGameSection.classList.remove('hidden');
+                gidSelectionSection.classList.add('hidden');
+                testCompletionSection.classList.add('hidden');
+                currentFlashcardDisplay.classList.remove('hidden'); // Ensure flashcard display is visible
+            } catch (error) {
+                console.error("Error fetching or parsing data:", error);
+                dataFetchErrorDisplay.textContent = `데이터를 불러오는 데 실패했습니다: ${error.message}`;
+                dataFetchErrorDisplay.classList.remove('hidden');
+                // Stay on GID selection section if error
+                flashcardGameSection.classList.add('hidden');
+                gidSelectionSection.classList.remove('hidden');
+            } finally {
+                loadingData.classList.add('hidden');
+            }
+        }
+
+        // --- UI Update Functions ---
+
+        // Display the current English word and hide Korean meaning
+        function displayCurrentWord() {
+            if (words.length > 0 && currentWordIndex < words.length) {
+                englishWordDisplay.textContent = words[currentWordIndex].english;
+                koreanMeaningDisplay.textContent = words[currentWordIndex].korean;
+                koreanMeaningDisplay.classList.add('hidden'); // Hide meaning by default
+            } else {
+                englishWordDisplay.textContent = '단어가 없습니다. 시트를 확인해주세요.';
+            }
+            koreanInput.focus(); // Focus input for quick entry
+        }
+
+        // Update score and progress display
+        function updateScoreAndProgress() {
+            currentScoreDisplay.textContent = score;
+            currentWordProgress.textContent = currentWordIndex + 1;
+            totalWordsInSheet.textContent = words.length;
+            currentGidDisplay.textContent = currentGid;
+        }
+
+        // Show test completion summary
+        function showTestCompletion() {
+            totalWordsCountDisplay.textContent = words.length;
+            correctAnswersFinalCountDisplay.textContent = correctAnswersCount;
+            currentFlashcardDisplay.classList.add('hidden'); // Hide game interface
+            testCompletionSection.classList.remove('hidden'); // Show completion section
+        }
+
+        // --- Event Handlers ---
+
+        // Handle URL submission
+        submitUrlButton.addEventListener('click', () => {
+            const url = googleSheetUrlInput.value.trim();
+            const id = extractSpreadsheetId(url);
+            if (id) {
+                spreadsheetId = id;
+                urlInputSection.classList.add('hidden');
+                gidSelectionSection.classList.remove('hidden');
+                urlError.classList.add('hidden');
+            } else {
+                urlError.textContent = '유효한 Google Sheet URL을 입력해주세요.';
+                urlError.classList.remove('hidden');
+            }
+        });
+
+        // Handle Enter key on URL input
+        googleSheetUrlInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                submitUrlButton.click();
+            }
+        });
+
+        // Handle GID dropdown change
+        gidDropdown.addEventListener('change', () => {
+            manualGidInput.value = ''; // Clear manual input if dropdown is used
+            currentGid = gidDropdown.value;
+            if (currentGid) {
+                fetchWords(currentGid);
+            }
+        });
+
+        // Handle manual GID input
+        manualGidInput.addEventListener('input', () => {
+            gidDropdown.value = ''; // Clear dropdown selection if manual input is used
+            currentGid = manualGidInput.value.trim();
+        });
+
+        // Handle Enter key on manual GID input
+        manualGidInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && manualGidInput.value.trim() !== '') {
+                currentGid = manualGidInput.value.trim();
+                fetchWords(currentGid);
+            }
+        });
+
+
+        // Back to URL input from GID selection
+        backToUrlInputButton.addEventListener('click', () => {
+            resetAppState();
+            urlInputSection.classList.remove('hidden');
+            gidSelectionSection.classList.add('hidden');
+        });
+
+        // Check Answer
+        checkAnswerButton.addEventListener('click', () => {
+            const currentWord = words[currentWordIndex];
+            if (!currentWord) return;
+
+            const normalizedInput = koreanInput.value.trim().toLowerCase();
+            const normalizedCorrect = currentWord.korean.trim().toLowerCase();
+
+            if (normalizedInput === normalizedCorrect) {
+                feedbackDisplay.textContent = 'O';
+                feedbackDisplay.className = 'text-5xl font-bold mb-6 text-green-500 animate-bounce';
+                feedbackDisplay.classList.remove('hidden');
+                score++;
+                if (attempts === 0) {
+                    correctAnswersCount++;
+                }
+                updateScoreAndProgress();
+                setTimeout(goToNextWord, 1000); // Go to next word after delay
+            } else {
+                feedbackDisplay.textContent = 'X';
+                feedbackDisplay.className = 'text-5xl font-bold mb-6 text-red-500 animate-bounce';
+                feedbackDisplay.classList.remove('hidden');
+                attempts++;
+                nextWordButton.classList.remove('hidden'); // Show "다음 단어" button for retry
+            }
+        });
+
+        // Handle Enter key on Korean input
+        koreanInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                checkAnswerButton.click();
+            }
+        });
+
+        // Show Meaning
+        showMeaningButton.addEventListener('click', () => {
+            koreanMeaningDisplay.classList.remove('hidden');
+            nextWordButton.classList.remove('hidden'); // Show next button when meaning is revealed
+            feedbackDisplay.classList.add('hidden'); // Hide feedback if user asks for meaning
+        });
+
+        // Go to Next Word (manually from 'X' feedback or '뜻 보기')
+        nextWordButton.addEventListener('click', goToNextWord);
+
+        // Exit to URL Input from mid-test
+        exitToUrlInputMidTestButton.addEventListener('click', exitTest);
+
+        // Restart test from completion screen
+        restartTestButton.addEventListener('click', () => {
+            // Re-fetch data to ensure word list is fresh (and not just current 'words' array)
+            fetchWords(currentGid);
+        });
+
+        // Exit test from completion screen
+        exitTestFinalButton.addEventListener('click', exitTest);
+
+        // --- Global Reset Function ---
+        function resetAppState() {
+            words = [];
+            currentWordIndex = 0;
+            score = 0;
+            attempts = 0;
+            correctAnswersCount = 0;
+            spreadsheetId = '';
+            currentGid = '';
+            googleSheetUrlInput.value = '';
+            koreanInput.value = '';
+            urlError.classList.add('hidden');
+            dataFetchErrorDisplay.classList.add('hidden');
+            loadingData.classList.add('hidden');
+            gidDropdown.value = '';
+            manualGidInput.value = '';
+            testCompletionSection.classList.add('hidden');
+            currentFlashcardDisplay.classList.remove('hidden'); // Make sure game UI is ready for next session
+            feedbackDisplay.classList.add('hidden');
+            koreanMeaningDisplay.classList.add('hidden');
+            nextWordButton.classList.add('hidden');
+
+            urlInputSection.classList.remove('hidden');
+            gidSelectionSection.classList.add('hidden');
+            flashcardGameSection.classList.add('hidden');
+        }
+
+        // Initialize app on load
+        function initApp() {
+            resetAppState(); // Ensure initial state is clean
+            urlInputSection.classList.remove('hidden'); // Show the URL input section initially
+        }
+
+        window.onload = initApp; // Call initApp when the window fully loads
+
+        // Function to move to next word and check for test completion
+        function goToNextWord() {
+            koreanInput.value = '';
+            feedbackDisplay.classList.add('hidden');
+            koreanMeaningDisplay.classList.add('hidden');
+            nextWordButton.classList.add('hidden'); // Hide next button
+
+            currentWordIndex++;
+            attempts = 0; // Reset attempts for new word
+
+            if (currentWordIndex < words.length) {
+                displayCurrentWord();
+                updateScoreAndProgress();
+            } else {
+                showTestCompletion();
+            }
+        }
+
+        // Function to exit the test from any state to the initial URL input screen
+        function exitTest() {
+            resetAppState();
+            urlInputSection.classList.remove('hidden');
+            gidSelectionSection.classList.add('hidden');
+            flashcardGameSection.classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
