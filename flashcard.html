@@ -272,7 +272,7 @@
         // Function to parse CSV text into an array of word objects
         function parseCsv(csvText) {
             const lines = csvText.split('\n').filter(line => line.trim() !== '');
-            const parsedData = [];
+            const wordMap = new Map(); // Use Map to group meanings by English word
 
             const startIndex = (lines.length > 0 && !lines[0].includes(',')) ? 1 : 0;
 
@@ -282,9 +282,24 @@
                     const english = parts[0].trim();
                     const korean = parts[1].trim();
                     if (english !== '' && korean !== '') {
-                        parsedData.push({ english, korean });
+                        if (wordMap.has(english)) {
+                            // Add to existing meanings if not already present
+                            const meanings = wordMap.get(english);
+                            if (!meanings.includes(korean)) {
+                                meanings.push(korean);
+                            }
+                        } else {
+                            // Create new entry with array of meanings
+                            wordMap.set(english, [korean]);
+                        }
                     }
                 }
+            }
+
+            // Convert Map to array of word objects
+            const parsedData = [];
+            for (const [english, koreanMeanings] of wordMap) {
+                parsedData.push({ english, korean: koreanMeanings });
             }
             return parsedData;
         }
@@ -397,7 +412,15 @@
         function displayCurrentWord() {
             if (words.length > 0 && currentWordIndex < words.length) {
                 englishWordDisplay.textContent = words[currentWordIndex].english;
-                koreanMeaningDisplay.textContent = words[currentWordIndex].korean;
+                
+                // Handle both single meaning (string) and multiple meanings (array)
+                const koreanMeanings = words[currentWordIndex].korean;
+                if (Array.isArray(koreanMeanings)) {
+                    koreanMeaningDisplay.textContent = koreanMeanings.join(', ');
+                } else {
+                    koreanMeaningDisplay.textContent = koreanMeanings;
+                }
+                
                 koreanMeaningDisplay.classList.add('hidden'); // Hide meaning by default
             } else {
                 englishWordDisplay.textContent = '단어가 없습니다. 시트를 확인해주세요.';
@@ -471,9 +494,14 @@
             if (!currentWord) return;
 
             const normalizedInput = koreanInput.value.trim().toLowerCase();
-            const normalizedCorrect = currentWord.korean.trim().toLowerCase();
+            
+            // Check if input matches any of the possible meanings
+            const koreanMeanings = Array.isArray(currentWord.korean) ? currentWord.korean : [currentWord.korean];
+            const isCorrect = koreanMeanings.some(meaning => 
+                meaning.trim().toLowerCase() === normalizedInput
+            );
 
-            if (normalizedInput === normalizedCorrect) {
+            if (isCorrect) {
                 feedbackDisplay.textContent = 'O';
                 feedbackDisplay.className = 'text-5xl font-bold mb-6 text-green-500 animate-bounce';
                 feedbackDisplay.classList.remove('hidden');
