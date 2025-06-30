@@ -269,6 +269,16 @@
             return match ? match[1] : null;
         }
 
+        // Function to shuffle an array using Fisher-Yates algorithm
+        function shuffleArray(array) {
+            const shuffled = [...array]; // Create a copy to avoid mutating the original
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            return shuffled;
+        }
+
         // Function to parse CSV text into an array of word objects
         function parseCsv(csvText) {
             const lines = csvText.split('\n').filter(line => line.trim() !== '');
@@ -376,7 +386,7 @@
                 if (parsedWords.length === 0) {
                     throw new Error("선택된 시트에서 유효한 단어를 찾을 수 없습니다. 데이터 형식을 확인해주세요.");
                 }
-                words = parsedWords;
+                words = shuffleArray(parsedWords);
                 currentWordIndex = 0;
                 score = 0;
                 attempts = 0;
